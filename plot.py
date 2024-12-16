@@ -1,12 +1,10 @@
 import plotly.express as px
-
 import pandas as pd
 
-# Read data from a csv
-df1 = pd.read_csv('mean_reward_out.csv')#自己手动切换 mean_reward_out.csv steps_out.csv
+# Đọc dữ liệu từ tệp CSV
+df1 = pd.read_csv('mean_reward_out.csv')  # Tự tay thay đổi mean_reward_out.csv thành steps_out.csv
 
-
-
+# Vẽ đồ thị đường cho MeanReward
 fig = px.line(df1 ,title='MeanReward')
 fig.update_xaxes(
     type='linear',
@@ -28,6 +26,4 @@ fig.update_yaxes(
     automargin=True,
 )
 
-
 fig.show()
-

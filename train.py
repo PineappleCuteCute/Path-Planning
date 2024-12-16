@@ -1,6 +1,4 @@
-
-
-'''训练程序'''
+'''Chương trình huấn luyện'''
 import pylab as pl
 from copy import deepcopy
 from env import PathPlanning, AlgorithmAdaptation
@@ -8,72 +6,62 @@ import pandas as pd
 from sac import SAC
 
 
+'''Cài đặt chế độ''' 
+MAX_EPISODE = 1000        # Tổng số lần huấn luyện/đánh giá
+render = False           # Có hiển thị quá trình huấn luyện không
 
 
-
-
-
-
-'''模式设置''' 
-MAX_EPISODE = 1000        # 总的训练/评估次数
-render = False           # 是否可视化
-
-
-'''环境算法设置'''
+'''Cài đặt môi trường và thuật toán'''
 env = PathPlanning(max_search_steps=300)
 env = AlgorithmAdaptation(env)
-agent = SAC(env.observation_space, env.action_space, memory_size=800000) # 实例化强化学习算法
+agent = SAC(env.observation_space, env.action_space, memory_size=800000) # Khởi tạo thuật toán học tăng cường
 
 
     
-'''强化学习训练/测试仿真'''
-steps_out =[]
+'''Huấn luyện/kiểm tra mô phỏng học tăng cường'''
+steps_out = []
 mean_reward_out = []
 
 for episode in range(MAX_EPISODE):
-    ## 重置回合奖励
+    ## Đặt lại phần thưởng cho vòng
     ep_reward = 0
     
-    ## 获取初始观测
+    ## Lấy quan sát ban đầu
     obs = env.reset()
     
-    ## 进行一回合仿真
+    ## Tiến hành một vòng mô phỏng
     for steps in range(env.max_episode_steps):
-        # 可视化
+        # Hiển thị
         if render:
             env.render()
         
-        # 决策
-        act = agent.select_action(obs)  # 随机策略
+        # Quyết định hành động
+        act = agent.select_action(obs)  # Chính sách ngẫu nhiên
 
-        # 仿真
-        next_obs, reward, done, info,agent1_pos = env.step(act)
+        # Mô phỏng
+        next_obs, reward, done, info, agent1_pos = env.step(act)
         ep_reward += reward
         
-        # 缓存
+        # Lưu trữ
         agent.store_memory((obs, act, reward, next_obs, done))
         
-        # 优化
+        # Tối ưu hóa
         agent.learn()
         
-        # 回合结束
+        # Kết thúc vòng
         if info["done"]:
             mean_reward = ep_reward / (steps + 1)
-            print('回合: ', episode,'| 累积奖励: ', round(ep_reward, 2),'| 平均奖励: ', round(mean_reward, 2),'| 状态: ', info,'| 步数: ', steps) 
+            print('Vòng: ', episode,'| Tổng phần thưởng: ', round(ep_reward, 2),'| Phần thưởng trung bình: ', round(mean_reward, 2),'| Trạng thái: ', info,'| Số bước: ', steps) 
             break
         else:
             obs = deepcopy(next_obs)
-    #end for
+    # Kết thúc vòng for
     steps_out.append(steps)
     mean_reward_out.append(mean_reward)
     
-#end for
+# Kết thúc vòng for
 df1 = pd.DataFrame(steps_out)
 df2 = pd.DataFrame(mean_reward_out)
 df1.to_excel('steps_out.xlsx', index=False)
 df2.to_excel('mean_reward_out.xlsx', index=False)
 agent.save("Model.pkl")
-
-
-
-

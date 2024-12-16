@@ -6,24 +6,19 @@ from torch.nn import functional as F
 from torch.distributions import Normal
 from copy import deepcopy
 
-
-
 LOG_STD_MAX = 2
 LOG_STD_MIN = -20
 
-
-
-# 创建MLP模型
+# Tạo mô hình MLP
 def build_mlp(layer_shape, activation=nn.ReLU, output_activation=nn.Identity, inplace=True):
-    """创建MLP模型
+    """Tạo mô hình MLP
 
-    Parameters
+    Tham số:
     ----------
-    layer_shape : MLP形状, list / tuple
-    activation : MLP激活函数, 默认 nn.ReLU
-    output_activation : MLP输出激活函数, 默认 nn.Identity
-    inplace : 例如ReLU之类的激活函数是否设置inplace, 默认 True
-
+    layer_shape : Kích thước của MLP, list / tuple
+    activation : Hàm kích hoạt của MLP, mặc định là nn.ReLU
+    output_activation : Hàm kích hoạt đầu ra của MLP, mặc định là nn.Identity
+    inplace : Ví dụ như các hàm kích hoạt như ReLU có đặt inplace hay không, mặc định là True
     """
     def _need_inplace(activation) -> bool:
         return activation == nn.ReLU or\
@@ -42,20 +37,19 @@ def build_mlp(layer_shape, activation=nn.ReLU, output_activation=nn.Identity, in
     for j in range(len(layer_shape)-1):
         act = activation if j < len(layer_shape)-2 else output_activation
         if inplace and _need_inplace(act):
-            layers += [nn.Linear(layer_shape[j], layer_shape[j+1]), act(inplace=True)] # 加快速度, 减小显存占用
+            layers += [nn.Linear(layer_shape[j], layer_shape[j+1]), act(inplace=True)] # Tăng tốc độ, giảm sử dụng bộ nhớ
         else:
-            layers += [nn.Linear(layer_shape[j], layer_shape[j+1]), act()] # 例如tanh没有inplace参数
+            layers += [nn.Linear(layer_shape[j], layer_shape[j+1]), act()] # Ví dụ như tanh không có tham số inplace
     return nn.Sequential(*layers)
 
 
-# Q网络
+# Mạng Q
 class Q_Critic(nn.Module):
     def __init__(self, num_states:int, num_actions:int, hidden_dims:tuple=(128,64)):
         super(Q_Critic, self).__init__()
         mlp_shape = [num_states + num_actions] + list(hidden_dims) + [1]
         self.Q1_Value = build_mlp(mlp_shape)
         self.Q2_Value = build_mlp(mlp_shape)
-
 
     def forward(self, obs, action):
         obs = nn.Flatten()(obs)
@@ -65,7 +59,7 @@ class Q_Critic(nn.Module):
         return Q1, Q2
 
 
-# P网络(OpenAI版)
+# Mạng P (phiên bản OpenAI)
 class Actor(nn.Module):
     def __init__(self, num_states:int, num_actions:int, hidden_dims=(128,128)):
         super(Actor, self).__init__()
@@ -85,60 +79,57 @@ class Actor(nn.Module):
         log_std = th.clamp(log_std, LOG_STD_MIN, LOG_STD_MAX) # ???
         std = th.exp(log_std)
 
-        # 策略分布
+        # Phân phối chiến lược
         dist = Normal(mu, std)
         if deterministic: u = mu
-        else: u = dist.rsample() # 重参数化采样(直接采样不可导)
+        else: u = dist.rsample() # Lấy mẫu theo phương pháp tái tham số hóa (sampling không thể đạo hàm)
 
-        a = th.tanh(u) # 压缩输出范围[-1, 1]
+        a = th.tanh(u) # Nén phạm vi đầu ra [-1, 1]
 
-        # 计算正态分布概率的对数 log[P_pi(a|s)] -> (batch, act_dim)
+        # Tính log xác suất phân phối chuẩn log[P_pi(a|s)] -> (batch, act_dim)
         if with_logprob:
-            # SAC论文通过u的对数概率计算a的对数概率公式:
+            # Công thức trong bài báo SAC tính log xác suất của a thông qua u:
             ''' logp_pi_a = (dist.log_prob(u) - torch.log(1 - a.pow(2) + 1e-6)).sum(dim=1, keepdim=True) '''
-            # SAC原文公式有a=tanh(u), 导致梯度消失, OpenAI公式:
+            # Công thức trong bài báo SAC có a = tanh(u), dẫn đến gradient bị mất, công thức của OpenAI:
             logp_pi_a = dist.log_prob(u).sum(axis=1, keepdim=True) - (2 * (np.log(2) - u - F.softplus(-2 * u))).sum(axis=1, keepdim=True) # (batch, 1)
         else:
             logp_pi_a = None
 
-        return a, logp_pi_a # (batch, act_dim) and (batch, 1)
+        return a, logp_pi_a # (batch, act_dim) và (batch, 1)
 
     def act(self, obs, deterministic=False) -> np.ndarray[any, float]:
         self.eval()
         with th.no_grad():
             a, _ = self.forward(obs, deterministic, False)
-        self.train()  # 恢复训练模式
+        self.train()  # Khôi phục lại chế độ huấn luyện
         return a.cpu().numpy().flatten() # (act_dim, ) ndarray
     
 
-
-
-
-# ReplayBuffer
+# Bộ nhớ ReplayBuffer
 class EasyBuffer:
 
     def __init__(self, memory_size, obs_space, act_space):
         assert not isinstance(obs_space, (gym.spaces.Tuple, gym.spaces.Dict)), "1"
         assert not isinstance(act_space, (gym.spaces.Tuple, gym.spaces.Dict)), "1"
         self.device = th.device("cuda:0" if th.cuda.is_available() else "cpu")
-        # buffer属性
-        self.ptr = 0    # buffer存储指针
-        self.idxs = [0] # 用于PER记住上一次采样索引, 一维 list 或 ndarray
+        # Thuộc tính buffer
+        self.ptr = 0    # Con trỏ lưu trữ của buffer
+        self.idxs = [0] # Dùng cho PER để nhớ chỉ số mẫu lần trước, list một chiều hoặc ndarray
         self.memory_size = memory_size
         self.current_size = 0 
-        # buffer容器
+        # Container buffer
         obs_shape = obs_space.shape or (1, )
         act_shape = act_space.shape or (1, )
         self.buffer = {}
-        self.buffer["obs"] = np.empty((memory_size, *obs_shape), dtype=obs_space.dtype) # (size, *obs_shape, )连续 (size, 1)离散
-        self.buffer["next_obs"] = deepcopy(self.buffer["obs"])                          # (size, *obs_shape, )连续 (size, 1)离散
-        self.buffer["act"] = np.empty((memory_size, *act_shape), dtype=act_space.dtype) # (size, *act_shape, )连续 (size, 1)离散
+        self.buffer["obs"] = np.empty((memory_size, *obs_shape), dtype=obs_space.dtype) # (size, *obs_shape, ) liên tục (size, 1) rời rạc
+        self.buffer["next_obs"] = deepcopy(self.buffer["obs"])                          # (size, *obs_shape, ) liên tục (size, 1) rời rạc
+        self.buffer["act"] = np.empty((memory_size, *act_shape), dtype=act_space.dtype) # (size, *act_shape, ) liên tục (size, 1) rời rạc
         self.buffer["rew"] = np.empty((memory_size, 1), dtype=np.float32)               # (size, 1)
-        self.buffer["done"] = np.empty((memory_size, 1), dtype=bool)                    # (size, 1) 
+        self.buffer["done"] = np.empty((memory_size, 1), dtype=bool)                    # (size, 1)
 
     def __getitem__(self, position):
-        """索引\n
-        即 batch = buffer[position] 与 batch = buffer.sample(idxs=position) 效果相同
+        """Truy cập theo chỉ số\n
+        Tương tự batch = buffer[position] và batch = buffer.sample(idxs=position) có hiệu ứng giống nhau
         """
         if isinstance(position, int): position = [position]
         return self.sample(idxs=position)
@@ -147,39 +138,40 @@ class EasyBuffer:
         return self.current_size 
 
     def reset(self):
-        """清空"""
+        """Xóa bộ nhớ"""
         self.ptr = 0
         self.idxs = [0]
         self.current_size = 0
 
     def push(self, transition, terminal=None):
-        """存储"""
-        # add a transition to the buffer
+        """Lưu trữ"""
+        # Thêm một chuyển tiếp vào buffer
         self.buffer["obs"][self.ptr] = transition[0]
         self.buffer["act"][self.ptr] = transition[1]
         self.buffer["rew"][self.ptr] = transition[2]
         self.buffer["next_obs"][self.ptr] = transition[3]
         self.buffer["done"][self.ptr] = transition[4]
-        # update ptr & size
-        self.ptr = (self.ptr + 1) % self.memory_size # 更新指针
-        self.current_size = min(self.current_size + 1, self.memory_size) # 更新容量
+        # Cập nhật con trỏ và kích thước
+        self.ptr = (self.ptr + 1) % self.memory_size # Cập nhật con trỏ
+        self.current_size = min(self.current_size + 1, self.memory_size) # Cập nhật dung lượng
 
     def sample(self, batch_size = 1, *, idxs = None, rate = None, **kwargs):
-        """采样"""
-        # make indexes
+        """Lấy mẫu"""
+        # Tạo chỉ mục
         if idxs is None:
-            assert batch_size <= self.current_size, "batch_size 要比当前容量小"
+            assert batch_size <= self.current_size, "batch_size phải nhỏ hơn hoặc bằng dung lượng hiện tại"
             idxs = np.random.choice(self.current_size, size=batch_size, replace=False)
-        # sample a batch from the buffer
+        # Lấy mẫu một batch từ buffer
         batch = {}
         for key in self.buffer:
             if key != "act":
                 batch[key] = th.FloatTensor(self.buffer[key][idxs]).to(self.device)
             else:
                 batch[key] = th.tensor(self.buffer[key][idxs]).to(self.device)
-        # update indexes
+        # Cập nhật chỉ mục
         self.idxs = idxs
         return batch
+
 
         
         
@@ -189,50 +181,50 @@ class SAC:
    
     def __init__( 
         self, 
-        observation_space: gym.Space, # 观测空间
-        action_space: gym.Space,      # 动作空间
+        observation_space: gym.Space, # Không gian quan sát
+        action_space: gym.Space,      # Không gian hành động
 
         *,
-        memory_size: int = 500000,  # 缓存大小
+        memory_size: int = 500000,  # Kích thước bộ nhớ
             
-        gamma: float = 0.99,        # 折扣因子 γ
-        alpha: float = 0.3,         # 温度系数 α
+        gamma: float = 0.99,        # Hệ số chiết khấu γ
+        alpha: float = 0.3,         # Hệ số nhiệt α
         
-        batch_size: int = 256,      # 样本容量
-        update_after: int = 10000,   # 训练开始，batch_size <= update_after <= memory_size  1000
+        batch_size: int = 256,      # Kích thước mẫu
+        update_after: int = 10000,   # Bắt đầu huấn luyện, batch_size <= update_after <= memory_size  1000
 
-        lr_decay_period: int = None, # 学习率衰减周期, None不衰减
-        lr_critic: float = 1e-3,     # Q 学习率
-        lr_actor: float = 1e-3,      # π 学习率
-        tau: float = 0.005,          # target Q 软更新系数 τ
+        lr_decay_period: int = None, # Chu kỳ giảm tốc độ học, None không giảm
+        lr_critic: float = 1e-3,     # Tốc độ học của Q
+        lr_actor: float = 1e-3,      # Tốc độ học của π
+        tau: float = 0.005,          # Hệ số cập nhật mềm cho target Q τ
 
-        q_loss_cls = nn.MSELoss,  # Q 损失函数类型(use_per=True时该设置无效)
+        q_loss_cls = nn.MSELoss,  # Loại hàm mất mát cho Q (cái này không có tác dụng khi use_per=True)
         
-        critic_optim_cls = th.optim.Adam, # Q 优化器类型
-        actor_optim_cls = th.optim.Adam,  # π 优化器类型
+        critic_optim_cls = th.optim.Adam, # Loại tối ưu hóa cho Q
+        actor_optim_cls = th.optim.Adam,  # Loại tối ưu hóa cho π
         
-        adaptive_alpha: bool = True,       # 是否自适应温度系数
-        target_entropy: float = None,      # 自适应温度系数目标熵, 默认: -dim(A)
-        lr_alpha: float = 1e-3,            # α 学习率
-        alpha_optim_class = th.optim.Adam, # α 优化器类型
+        adaptive_alpha: bool = True,       # Có điều chỉnh α tự động không
+        target_entropy: float = None,      # Mục tiêu entropy cho hệ số α tự động, mặc định: -dim(A)
+        lr_alpha: float = 1e-3,            # Tốc độ học cho α
+        alpha_optim_class = th.optim.Adam, # Loại tối ưu hóa cho α
 
-        use_per: bool = False,  # 是否优先经验回放
-        per_alpha: float = 0.6, # 优先回放 α
-        per_beta0: float = 0.4, # 优先回放 β
+        use_per: bool = False,  # Sử dụng replay buffer có ưu tiên không
+        per_alpha: float = 0.6, # Ưu tiên replay α
+        per_beta0: float = 0.4, # Ưu tiên replay β
 
-        grad_clip: float = None, # Q网络梯度裁剪范围, None不裁剪
+        grad_clip: float = None, # Phạm vi cắt gradient cho mạng Q, None là không cắt
 
     ):
-        assert isinstance(action_space, gym.spaces.Box), 'SAC只用于Box动作空间'
+        assert isinstance(action_space, gym.spaces.Box), 'SAC chỉ sử dụng không gian hành động Box'
         self.device = th.device("cuda:0" if th.cuda.is_available() else "cpu")
 
-        # 环境参数
+        # Thông số môi trường
         self.observation_space = observation_space
         self.action_space = action_space
         self.num_states = np.prod(observation_space.shape)
         self.num_actions = np.prod(action_space.shape)
 
-        # SAC参数初始化
+        # Khởi tạo các tham số SAC
         self.gamma = gamma
         self.batch_size = int(batch_size)
         self.update_after = int(update_after)
@@ -242,43 +234,43 @@ class SAC:
         self.lr_critic = lr_critic
         self.tau = tau
 
-        # ReplayBuffer初始化
+        # Khởi tạo ReplayBuffer
         self.memory_size = int(memory_size)
         self.use_per = use_per
         if use_per:
-            raise NotImplementedError("阉割版代码不支持PER")
+            raise NotImplementedError("Phiên bản rút gọn không hỗ trợ PER")
         else:
             self.buffer = EasyBuffer(self.memory_size, self.observation_space, self.action_space)
 
-        # 神经网络初始化
+        # Khởi tạo mạng neural
         self.actor = Actor(self.num_states, self.num_actions).to(self.device)
         self.q_critic = Q_Critic(self.num_states, self.num_actions).to(self.device) # Twin Q Critic
         self.target_q_critic = self._build_target(self.q_critic)
         
-        # 优化器初始化
+        # Khởi tạo bộ tối ưu hóa
         self.actor_optimizer = actor_optim_cls(self.actor.parameters(), lr_actor)
         self.q_critic_optimizer = critic_optim_cls(self.q_critic.parameters(), lr_critic)
         
-        # 设置损失函数
+        # Thiết lập hàm mất mát
         self.grad_clip = grad_clip
         self.q_loss = q_loss_cls()
         
-        # 是否自适应α
+        # Có điều chỉnh α tự động không
         self.alpha = alpha
         self.adaptive_alpha = adaptive_alpha
         if adaptive_alpha:
             target_entropy = target_entropy or -self.num_actions # Target Entropy = −dim(A)
             self.target_entropy = th.tensor(target_entropy, dtype=float, requires_grad=True, device=self.device)
-            self.log_alpha = th.tensor(np.log(alpha), dtype=float, requires_grad=True, device=self.device) # log_alpha无>0的约束
+            self.log_alpha = th.tensor(np.log(alpha), dtype=float, requires_grad=True, device=self.device) # log_alpha không có ràng buộc >0
             self.alpha_optimizer = alpha_optim_class([self.log_alpha], lr = lr_alpha)
             self.lr_alpha = lr_alpha
 
-        # 其它参数
+        # Các tham số khác
         self.learn_counter = 0
  
     
     def set_nn(self, actor: Actor, critic: Q_Critic, *, actor_optim_cls=th.optim.Adam, critic_optim_cls=th.optim.Adam, copy=True):
-        """修改神经网络模型, 要求按Actor/Q_Critic格式自定义网络"""
+        """Thay đổi mô hình mạng neural, yêu cầu theo định dạng Actor/Q_Critic"""
         self.actor = deepcopy(actor) if copy else actor
         self.actor.train().to(self.device)
         self.q_critic = deepcopy(critic) if copy else critic
@@ -288,27 +280,27 @@ class SAC:
         self.q_critic_optimizer = critic_optim_cls(self.q_critic.parameters(), self.lr_critic)
 
     def set_buffer(self, buffer: EasyBuffer):
-        """修改replay buffer, 要求按EasyBuffer定义"""
+        """Thay đổi replay buffer, yêu cầu theo định dạng EasyBuffer"""
         self.buffer = buffer
     
     def store_memory(self, transition, terminal: bool = None):
-        """经验存储"""
+        """Lưu trữ kinh nghiệm"""
         self.buffer.push(transition, terminal)
 
 
     def select_action(self, state, *, deterministic=False, **kwargs) -> np.ndarray:
-        """选择动作"""
-        state = th.FloatTensor(state).unsqueeze(0).to(self.device) # (1, state_dim) tensor
+        """Chọn hành động"""
+        state = th.FloatTensor(state).unsqueeze(0).to(self.device) # (1, state_dim) tensor GPU
         return self.actor.act(state, deterministic) # (act_dim, ) ndarray
 
 
     def learn(self, *, rate: float = None) -> dict:
-        """强化学习
+        """Học tăng cường
 
-        Parameters
+        Tham số
         ----------
-        rate : float, optional
-            用于更新PER的参数 beta, 默认None不更新
+        rate : float, tùy chọn
+            Dùng để cập nhật tham số PER beta, mặc định None không cập nhật
             rate = train_steps / max_train_steps
             beta = beta0 + (1-beta0) * rate
         """
@@ -319,39 +311,38 @@ class SAC:
         
         self.learn_counter += 1
         
-        ''' experience repaly '''
-        samples = self.buffer.sample(self.batch_size, rate=rate) # return tensor GPU
-        state = samples["obs"]           # (m, obs_dim) tensor GPU
-        action = samples["act"]          # (m, act_dim) tensor GPU
-        reward = samples["rew"]          # (m, 1) tensor GPU
-        next_state = samples["next_obs"] # (m, obs_dim) tensor GPU
-        done = samples["done"]           # (m, 1) tensor GPU
+        ''' replay kinh nghiệm '''
+        samples = self.buffer.sample(self.batch_size, rate=rate) # trả về tensor trên GPU
+        state = samples["obs"]           # (m, obs_dim) tensor trên GPU
+        action = samples["act"]          # (m, act_dim) tensor trên GPU
+        reward = samples["rew"]          # (m, 1) tensor trên GPU
+        next_state = samples["next_obs"] # (m, obs_dim) tensor trên GPU
+        done = samples["done"]           # (m, 1) tensor trên GPU
         if self.use_per:
-            IS_weight = samples["IS_weight"] # (m, 1) tensor GPU
+            IS_weight = samples["IS_weight"] # (m, 1) tensor trên GPU
 
 
-        ''' Q Critic 网络优化 '''
+        ''' Tối ưu mạng Q Critic '''
         # J(Q) = E_{s_t~D, a_t~D, s_t+1~D, a_t+1~π_t+1}[0.5*[ Q(s_t, a_t) - [r + (1-d)*γ* [ Q_tag(s_t+1,a_t+1) - α*logπ_t+1 ] ]^2 ]
-        # 计算目标 Q 值
+        # Tính toán giá trị Q mục tiêu
         with th.no_grad():
             next_action, next_log_pi = self.actor(next_state)                                 # 
             Q1_next, Q2_next = self.target_q_critic(next_state, next_action)                  # 
             Q_next = th.min(Q1_next, Q2_next)                                                 # 
-            #V_next = Q_next - self.alpha * next_log_pi
             Q_targ = reward + (1.0 - done) * self.gamma * (Q_next - self.alpha * next_log_pi) # 4-12
 
-        # 计算当前 Q 值
+        # Tính toán giá trị Q hiện tại
         Q1_curr, Q2_curr = self.q_critic(state, action) # 4-13
 
-        # 计算损失
+        # Tính toán hàm mất mát
         if self.use_per:
-            td_err1, td_err2 = Q1_curr-Q_targ, Q2_curr-Q_targ  # (m, 1) tensor GPU with grad
-            q_loss = (IS_weight * (td_err1 ** 2)).mean() + (IS_weight * (td_err2 ** 2)).mean() # () 注意: mean一定加在最外面！！！！
-            self.buffer.update_priorities(td_err1.detach().cpu().numpy().flatten()) # 更新优先级 td err: (m, ) ndarray
+            td_err1, td_err2 = Q1_curr-Q_targ, Q2_curr-Q_targ  # (m, 1) tensor trên GPU với grad
+            q_loss = (IS_weight * (td_err1 ** 2)).mean() + (IS_weight * (td_err2 ** 2)).mean() # () Lưu ý: mean phải được tính ở ngoài cùng
+            self.buffer.update_priorities(td_err1.detach().cpu().numpy().flatten()) # Cập nhật độ ưu tiên td err: (m, ) ndarray
         else:
             q_loss = self.q_loss(Q1_curr, Q_targ) + self.q_loss(Q2_curr, Q_targ) # ()
 
-        # 优化网络
+        # Tối ưu mạng
         self.q_critic_optimizer.zero_grad()
         q_loss.backward()
         if self.grad_clip:
@@ -359,27 +350,26 @@ class SAC:
         self.q_critic_optimizer.step()
 
 
-        ''' Actor 网络优化 '''
+        ''' Tối ưu mạng Actor '''
         # J(π) = E_{s_t~D, a~π_t}[ α*logπ_t(a|π_t) - Q(s_t, a) ]   
         self._freeze_network(self.q_critic)
       
-        # 策略评估
-        new_action, log_pi = self.actor(state)    # (m, act_dim), (m, 1) tensor GPU with grad
-        Q1, Q2 = self.q_critic(state, new_action) # (m, 1) tensor GPU no grad
-        Q = th.min(Q1, Q2)                        # (m, 1) tensor GPU no grad
+        # Đánh giá chính sách
+        new_action, log_pi = self.actor(state)    # (m, act_dim), (m, 1) tensor trên GPU với grad
+        Q1, Q2 = self.q_critic(state, new_action) # (m, 1) tensor trên GPU không có grad
+        Q = th.min(Q1, Q2)                        # (m, 1) tensor trên GPU không có grad
 
-        # 策略优化
+        # Tối ưu chính sách
         a_loss = (self.alpha * log_pi - Q).mean()
         self._optim_step(self.actor_optimizer, a_loss)
 
         self._unfreeze_network(self.q_critic)
 
 
-        ''' alpha 温度系数优化 '''
+        ''' Tối ưu hệ số nhiệt alpha '''
         # J(α) = E_{a~π_t}[ -α * ( logπ_t(a|π_t) + H0 ) ]
         if self.adaptive_alpha:
-            alpha_loss = -(self.log_alpha * (log_pi + self.target_entropy).detach()).mean()      # log公式: 收敛较快, 计算较快
-            #alpha_loss = -(self.log_alpha.exp() * (log_pi + self.target_entropy).detach()).mean() # 原公式: 收敛用的episode较大, 且计算速度慢
+            alpha_loss = -(self.log_alpha * (log_pi + self.target_entropy).detach()).mean()      # log công thức: hội tụ nhanh hơn, tính toán nhanh hơn
             self._optim_step(self.alpha_optimizer, alpha_loss)
             self.alpha = self.log_alpha.exp().item()
             alpha_loss_scalar = alpha_loss.item()
@@ -387,18 +377,18 @@ class SAC:
             alpha_loss_scalar = None
 
 
-        ''' target Q 网络优化'''
+        ''' Tối ưu mạng target Q '''
         self._soft_update(self.target_q_critic, self.q_critic, self.tau)
         
 
-        ''' use lr decay '''
+        ''' Sử dụng giảm tốc độ học '''
         self._lr_decay(self.actor_optimizer)
         self._lr_decay(self.q_critic_optimizer)
         if self.adaptive_alpha:
             self._lr_decay(self.alpha_optimizer)
 
 
-        ''' return info '''
+        ''' Trả về thông tin '''
         return {'q_loss': q_loss.item(), 
                 'actor_loss': a_loss.item(), 
                 'alpha_loss': alpha_loss_scalar, 
@@ -408,51 +398,49 @@ class SAC:
     
 
     def save(self, file):
-        """存储Actor网络权重"""
+        """Lưu trữ trọng số của mạng Actor"""
         th.save(self.actor.state_dict(), file)
         
     
     def load(self, file):
-        """加载Actor网络权重"""
+        """Tải trọng số của mạng Actor"""
         self.actor.load_state_dict(th.load(file, map_location=self.device))
 
     
     @staticmethod
     def _soft_update(target_network: nn.Module, network: nn.Module, tau: float):
         """
-        目标神经网络软更新\n
+        Cập nhật mềm cho mạng neural mục tiêu\n
         >>> for target_param, param in zip(target_network.parameters(), network.parameters()):
         >>>    target_param.data.copy_(target_param.data * (1.0 - tau) + param.data * tau)
         """
         for target_param, param in zip(target_network.parameters(), network.parameters()):
-            target_param.data.copy_( target_param.data * (1.0 - tau) + param.data * tau ) # 软更新
+            target_param.data.copy_( target_param.data * (1.0 - tau) + param.data * tau ) # Cập nhật mềm
    
     @staticmethod
     def _hard_update(target_network: nn.Module, network: nn.Module):
         """
-        目标神经网络硬更新\n
+        Cập nhật cứng cho mạng neural mục tiêu\n
         >>> target_network.load_state_dict(network.state_dict())
         """
-        # for target_param, param in zip(target_network.parameters(), network.parameters()):
-        #     target_param.data.copy_(param.data)
-        target_network.load_state_dict(network.state_dict()) # 硬更新
+        target_network.load_state_dict(network.state_dict()) # Cập nhật cứng
 
     @staticmethod
     def _freeze_network(network: nn.Module):
         """
-        冻结神经网络\n
+        Đóng băng mạng neural\n
         >>> for p in network.parameters():
         >>>     p.requires_grad = False
         """
         for p in network.parameters():
             p.requires_grad = False
-        # requires_grad = False 用于串联网络(梯度需要传回)计算损失, 如将Q梯度传回Actor网络, 但不更新Critic
-        # with th.no_grad() 用于并联或串联网络(梯度不需要传回)计算损失, 如Actor计算next_a, 用next_a计算Q, 但Q梯度不传回Actor
+        # requires_grad = False được dùng để kết nối mạng (gradient cần được truyền lại), ví dụ như khi gradient của Q cần truyền lại mạng Actor nhưng không cập nhật Critic
+        # with th.no_grad() được dùng cho mạng song song hoặc kết nối mạng (gradient không cần được truyền lại), ví dụ như Actor tính toán next_a, và dùng next_a tính Q nhưng không truyền gradient của Q về Actor
 
     @staticmethod
     def _unfreeze_network(network: nn.Module):
         """
-        解冻神经网络\n
+        Mở băng mạng neural\n
         >>> for p in network.parameters():
         >>>     p.requires_grad = True
         """
@@ -462,7 +450,7 @@ class SAC:
     @staticmethod
     def _build_target(network: nn.Module):
         """
-        拷贝一份目标网络\n
+        Sao chép mạng neural mục tiêu\n
         >>> target_network = deepcopy(network).eval()
         >>> for p in target_network.parameters():
         >>>     p.requires_grad = False
@@ -475,7 +463,7 @@ class SAC:
     @staticmethod
     def _set_lr(optimizer: th.optim.Optimizer, lr: float):
         """
-        调整优化器学习率\n
+        Điều chỉnh tốc độ học của bộ tối ưu hóa\n
         >>> for g in optimizer.param_groups:
         >>>     g['lr'] = lr
         """
@@ -483,20 +471,20 @@ class SAC:
             g['lr'] = lr
 
     def _lr_decay(self, optimizer: th.optim.Optimizer):
-        """学习率衰减 (在 lr_decay_period 周期内衰减到初始的 0.1 倍, period 为 None/0 不衰减)
+        """Giảm tốc độ học (giảm đến 0.1 lần tốc độ học ban đầu trong chu kỳ lr_decay_period, period là None/0 thì không giảm)
         >>> lr = 0.9 * lr_init * max(0, 1 - step / lr_decay_period) + 0.1 * lr_init
         >>> self._set_lr(optimizer, lr)
         """
         if self.lr_decay_period:
-            lr_init = optimizer.defaults["lr"] # 读取优化器初始化时的 lr_init
-            lr = 0.9 * lr_init * max(0, 1 - self.learn_counter / self.lr_decay_period) + 0.1 * lr_init # 更新 lr
-            self._set_lr(optimizer, lr) # 更改 param_groups 的 lr
-            # NOTE 修改 param_groups 的 lr 并不会改变 defaults 的 lr
+            lr_init = optimizer.defaults["lr"] # Lấy tốc độ học ban đầu
+            lr = 0.9 * lr_init * max(0, 1 - self.learn_counter / self.lr_decay_period) + 0.1 * lr_init # Cập nhật tốc độ học
+            self._set_lr(optimizer, lr) # Thay đổi tốc độ học trong param_groups
+            # Lưu ý: thay đổi tốc độ học trong param_groups không thay đổi lr trong defaults
 
     @staticmethod
     def _optim_step(optimizer: th.optim.Optimizer, loss: th.Tensor):
         """
-        神经网络权重更新\n
+        Cập nhật trọng số mạng neural\n
         >>> optimizer.zero_grad()
         >>> loss.backward()
         >>> optimizer.step()

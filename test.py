@@ -1,6 +1,4 @@
-
-
-'''测试程序'''
+'''Chương trình kiểm tra'''
 import torch
 import pylab as pl
 from copy import deepcopy
@@ -10,15 +8,15 @@ from sac import SAC
 
 
 pl.mpl.rcParams['font.sans-serif'] = ['Microsoft YaHei'] 
-pl.close('all')                                          # 关闭所有窗口
+pl.close('all')                                          # Đóng tất cả các cửa sổ
 
 
-'''模式设置''' 
-MAX_EPISODE = 1        # 总的训练/评估次数
-render = True           # 是否可视化训练/评估过程(仿真速度会降几百倍)
-agentpos =[]
+'''Cài đặt chế độ''' 
+MAX_EPISODE = 1        # Tổng số lần huấn luyện/đánh giá
+render = True           # Có hiển thị quá trình huấn luyện/đánh giá không (tốc độ mô phỏng sẽ giảm vài trăm lần)
+agentpos = []
 
-'''环境算法设置'''
+'''Cài đặt môi trường và thuật toán'''
 env = PathPlanning()
 env = AlgorithmAdaptation(env)
 agent = SAC(env.observation_space, env.action_space, memory_size=1)
@@ -26,38 +24,32 @@ agent.load("Model.pkl")
 
 
     
-'''强化学习训练/测试仿真'''
+'''Huấn luyện/kiểm tra mô phỏng học tăng cường'''
 for episode in range(MAX_EPISODE):
-    ## 获取初始观测
+    ## Lấy quan sát ban đầu
     obs = env.reset()
     
-    ## 进行一回合仿真
+    ## Tiến hành một vòng mô phỏng
     for steps in range(env.max_episode_steps):
-        # 可视化
+        # Hiển thị
         if render:
             env.render()
         
-        # 决策
+        # Quyết định hành động
         act = agent.select_action(obs)
 
-        # 仿真
-        next_obs, _, _, info,agent1_pos = env.step(act)
+        # Mô phỏng
+        next_obs, _, _, info, agent1_pos = env.step(act)
         
-        # 回合结束
+        # Kết thúc vòng
         if info["done"]:
-            print('回合: ', episode,'| 状态: ', info,'| 步数: ', steps) 
+            print('Vòng: ', episode,'| Trạng thái: ', info,'| Số bước: ', steps) 
             break
         else:
             obs = deepcopy(next_obs)
         agentpos.append(agent1_pos)    
     
-    #end for
+    # Kết thúc vòng for
     df = pd.DataFrame(agentpos)
     df.to_excel('agentpos.xlsx', index=False)
-#end for
-
-
-
-
-
-
+# Kết thúc vòng for
