@@ -25,10 +25,10 @@ class Map:
         cls.poly1 =  np.array([(-8+(3*x), 5), (-6+(3*x), 5), (-6+(3*x), 3), (-8+(3*x), 3)])
         cls.poly2 =  np.array([(6-(3*x), 0), (8-(3*x), 0), (8-(3*x), -2), (6-(3*x), -2)])
 
-        cls.obstacles = [                 # Chướng ngại vật, yêu cầu là geo.Polygon hoặc geo.Point/geo.LineString có buffer
-        geo.Polygon(cls.poly1),
-        geo.Polygon([(-6, -3), (-3, -3), (-3, -5), (-6, -5)]),
-        geo.Polygon(cls.poly2),
+        cls.obstacles = [ # Chướng ngại vật động # Chướng ngại vật, yêu cầu là geo.Polygon hoặc geo.Point/geo.LineString có buffer
+        geo.Polygon(cls.poly1),# Chướng ngại vật động 1
+        geo.Polygon([(-6, -3), (-3, -3), (-3, -5), (-6, -5)]),# Chướng ngại vật tĩnh 2
+        geo.Polygon(cls.poly2),# Chướng ngại vật động 2
     ] 
 
     @classmethod

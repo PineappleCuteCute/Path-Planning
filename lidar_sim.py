@@ -1,10 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Tạo vào Thứ Ba, ngày 1 tháng 8, 2023, 18:00:37
-
-Tác giả: HJ
-"""
-
 import numpy as np
 from shapely import affinity
 from shapely import Polygon, Point, LineString, LinearRing
