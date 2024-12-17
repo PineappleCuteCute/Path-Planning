@@ -1,7 +1,4 @@
-**SAC-1812** # Không phải 1801
-
-**Thuật toán và ứng dụng Soft Actor-Critic** (arXiv: 1812)
-
+**SAC** 
 ---
 
 ## **Yêu cầu**:
@@ -13,8 +10,3 @@
 - Matplotlib >= 3.5.1 (Vẽ đồ thị)
 - Scipy >= 1.7.3 (Tích phân)
 - Shapely >= 2.0.1 (Vật cản)
-
----
-
-**Tham khảo**:  
-[https://github.com/zhaohaojie1998/DRL-for-Path-Planning](https://github.com/zhaohaojie1998/DRL-for-Path-Planning)
