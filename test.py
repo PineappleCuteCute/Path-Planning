@@ -2,7 +2,7 @@
 import torch
 import pylab as pl
 from copy import deepcopy
-from env import PathPlanning, AlgorithmAdaptation
+from env3 import PathPlanning, AlgorithmAdaptation
 import pandas as pd
 from sac import SAC
 
