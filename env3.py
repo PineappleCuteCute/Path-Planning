@@ -13,39 +13,44 @@ import random
 
 
 class Map:
-    size = np.array([[0, 0], [10, 10]])  # Giá trị nhỏ nhất và lớn nhất của x, y (phòng kín trong góc phần tư thứ nhất)
-    start_pos = np.array([1, 9])  # Tọa độ điểm bắt đầu
-    end_pos = np.array([9, 1])  # Tọa độ điểm kết thúc
+    size = np.array([[-10.0, -10.0], [10.0, 10.0]])  # Giá trị nhỏ nhất và lớn nhất của x, y
+    start_pos = np.array([-7, 7])  # Tọa độ điểm bắt đầu
+    end_pos = np.array([10, -10])  # Tọa độ điểm kết thúc
+    obstacles = []  # Chướng ngại vật tĩnh
 
-    # Các bức tường phòng kín (4 cạnh ngoài và 1 vài vách ngăn bên trong)
-    obstacles = [
-        geo.Polygon([(0, 0), (10, 0), (10, 0.2), (0, 0.2)]),  # Tường dưới
-        geo.Polygon([(0, 0), (0.2, 0), (0.2, 10), (0, 10)]),  # Tường trái
-        geo.Polygon([(9.8, 0), (10, 0), (10, 10), (9.8, 10)]),  # Tường phải
-        geo.Polygon([(0, 9.8), (10, 9.8), (10, 10), (0, 10)]),  # Tường trên
-        geo.Polygon([(3, 3), (7, 3), (7, 3.2), (3, 3.2)]),  # Vách ngăn ngang
-        geo.Polygon([(5, 3.2), (5.2, 3.2), (5.2, 7), (5, 7)]),  # Vách ngăn dọc
-    ]
+    def __init__(self):
+        self.randomize_obstacles()
 
-    # Chướng ngại vật động (ban đầu đặt tại các vị trí cố định)
-    dynamic_obstacles = [
-        geo.Point(2, 2),
-        geo.Point(4, 6),
-        geo.Point(6, 4),
-        geo.Point(8, 8),
-        geo.Point(7, 2)
-    ]
+    def randomize_obstacles(self):
+        # Xóa các chướng ngại vật cũ
+        self.obstacles = []
 
-    @classmethod
-    def update(cls, t):
-        """Di chuyển 5 chướng ngại vật động theo thời gian t"""
-        cls.dynamic_obstacles = [
-            geo.Point(2 + 0.5 * np.sin(t), 2 + 0.5 * np.cos(t)),
-            geo.Point(4 + 0.5 * np.cos(t), 6 + 0.5 * np.sin(t)),
-            geo.Point(6 + 0.5 * np.sin(t), 4 + 0.5 * np.cos(t)),
-            geo.Point(8 + 0.5 * np.cos(t), 8 + 0.5 * np.sin(t)),
-            geo.Point(7 + 0.5 * np.sin(t), 2 + 0.5 * np.cos(t))
-        ]
+        # Tạo các chướng ngại vật tĩnh với vị trí ngẫu nhiên và không đè lên nhau
+        for _ in range(10):  # Số lượng chướng ngại vật tĩnh
+            while True:
+                x = random.uniform(-9, 9)
+                y = random.uniform(-9, 9)
+                width = random.uniform(1, 3)
+                height = random.uniform(1, 3)
+                new_obstacle = geo.Polygon([
+                    (x, y),
+                    (x + width, y),
+                    (x + width, y + height),
+                    (x, y + height)
+                ])
+                # Kiểm tra xem chướng ngại vật mới có giao với bất kỳ chướng ngại vật nào đã có không
+                overlap = False
+                for obstacle in self.obstacles:
+                    if new_obstacle.intersects(obstacle):
+                        overlap = True
+                        break
+                if not overlap:
+                    self.obstacles.append(new_obstacle)
+                    break
+
+    def update(cls, x):
+        # Không có chướng ngại vật động
+        pass
 
     @classmethod
     def show(cls):
@@ -55,30 +60,24 @@ class Map:
         pl.close('all')
         pl.figure('Map')
         pl.clf()
-
-        # Vẽ các bức tường phòng kín
+    
+        # Vẽ các chướng ngại vật
         for o in cls.obstacles:
-            plot_polygon(o, facecolor='gray', edgecolor='k', add_points=False, label='Tường')
-
-        # Vẽ các chướng ngại vật động
-        for o in cls.dynamic_obstacles:
-            plot_polygon(o.buffer(0.2), facecolor='r', edgecolor='r', add_points=False, label='Chướng ngại vật động')
+            plot_polygon(o, facecolor='w', edgecolor='k', add_points=False)
 
         # Vẽ điểm bắt đầu và kết thúc
-        pl.scatter(cls.start_pos[0], cls.start_pos[1], s=30, c='g', marker='^', label='Điểm bắt đầu')
-        pl.scatter(cls.end_pos[0], cls.end_pos[1], s=30, c='b', marker='o', label='Điểm kết thúc')
-
-        pl.legend(loc='best').set_draggable(True)  # Hiển thị chú thích
+        pl.scatter(cls.start_pos[0], cls.start_pos[1], s=30, c='k', marker='x')
+        pl.scatter(cls.end_pos[0], cls.end_pos[1], s=30, c='k', marker='o')
+  
         pl.axis('equal')  # Tạo hệ trục tọa độ đều
         pl.xlabel("x")  # Nhãn trục x
         pl.ylabel("y")  # Nhãn trục y
         pl.xlim(cls.size[0][0], cls.size[1][0])  # Giới hạn trục x
         pl.ylim(cls.size[0][1], cls.size[1][1])  # Giới hạn trục y
-        pl.title('Phòng kín với 5 chướng ngại vật động')  # Tiêu đề
+        pl.title('Bản đồ')  # Tiêu đề
         pl.grid()  # Hiển thị lưới
         pl.grid(alpha=0.3, ls=':')  # Thay đổi độ trong suốt và kiểu đường lưới
         pl.show(block=True)
-
 
 
 # Môi trường tĩnh
@@ -101,6 +100,9 @@ class PathPlanning(gym.Env):
         self.__reset_flag = False
         self.time_steps = 0 
         self.traj = []
+        
+        # Random lại vị trí các chướng ngại vật tĩnh
+        self.map.randomize_obstacles()
         
         self.agent_pos = np.array(self.map.start_pos)
         
@@ -221,22 +223,19 @@ class PathPlanning(gym.Env):
         # Xóa hình cũ
         pl.clf() 
         # Vẽ các chướng ngại vật
-        for o in self.map.obstacles[0:2]:
+        for o in self.map.obstacles:
             plot_polygon(o, facecolor='c', edgecolor='k', add_points=False)
-        o = self.map.obstacles[2]
-        plot_polygon(o, facecolor='c', edgecolor='k', add_points=False, label='Chướng ngại vật')
-        plot_polygon(geo.Point(self.agent_pos).buffer(0.8), facecolor='y', edgecolor='y', add_points=False, label='Khu vực cảnh báo')
-        plot_polygon(geo.Point(self.agent_pos).buffer(0.3), facecolor='r', edgecolor='r', add_points=False, label='Khu vực nguy hiểm')
+        plot_polygon(geo.Point(self.agent_pos).buffer(0.8), facecolor='y', edgecolor='y', add_points=False)
+        plot_polygon(geo.Point(self.agent_pos).buffer(0.3), facecolor='r', edgecolor='r', add_points=False)
         # Vẽ điểm bắt đầu và kết thúc
-        pl.scatter(self.map.start_pos[0], self.map.start_pos[1], s=30, c='k', marker='x', label='Điểm bắt đầu')
-        pl.scatter(self.map.end_pos[0], self.map.end_pos[1], s=30, c='k', marker='o', label='Điểm kết thúc')
+        pl.scatter(self.map.start_pos[0], self.map.start_pos[1], s=30, c='k', marker='x')
+        pl.scatter(self.map.end_pos[0], self.map.end_pos[1], s=30, c='k', marker='o')
         # Vẽ quỹ đạo
         self.traj.append(self.agent_pos.tolist())
         new_lst = [item for sublist in self.traj for item in sublist]
-        pl.plot(new_lst[::2], new_lst[1::2], label='Lộ trình', color='b')
+        pl.plot(new_lst[::2], new_lst[1::2], color='b')
 
         pl.scatter(self.agent_pos[0], self.agent_pos[1], s=1, c='k')
-        pl.legend(loc='best')
         pl.axis('equal')  # Tạo hệ trục tọa độ đều
         pl.xlabel("x")  # Nhãn trục x
         pl.ylabel("y")  # Nhãn trục y

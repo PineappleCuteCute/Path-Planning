@@ -14,38 +14,53 @@ import random
 
 class Map:
     size = np.array([[-10.0, -10.0], [10.0, 10.0]])  # Giá trị nhỏ nhất và lớn nhất của x, y
-    start_pos = np.array([-9, 9])  # Tọa độ điểm bắt đầu
-    end_pos = np.array([9, -9])  # Tọa độ điểm kết thúc
+    start_pos = np.array([-7, 7])  # Tọa độ điểm bắt đầu
+    end_pos = np.array([9.5, -9.5])  # Tọa độ điểm kết thúc
 
-    # Chướng ngại vật ban đầu tạo thành mê cung
-    obstacles = [
-        geo.Polygon([(-8, 8), (-6, 8), (-6, 6), (-8, 6)]),
-        geo.Polygon([(6, 6), (8, 6), (8, 4), (6, 4)]),
-        geo.Polygon([(-8, -2), (-6, -2), (-6, -4), (-8, -4)]),
-        geo.Polygon([(4, -8), (6, -8), (6, -6), (4, -6)]),
-        geo.Polygon([(-4, 4), (-2, 4), (-2, 2), (-4, 2)]),
-        geo.Polygon([(0, 8), (2, 8), (2, 6), (0, 6)]),
-        geo.Polygon([(-6, -8), (-4, -8), (-4, -6), (-6, -6)]),
-        geo.Polygon([(6, -2), (8, -2), (8, -4), (6, -4)]),
-        geo.Polygon([(-2, -6), (0, -6), (0, -8), (-2, -8)]),
-        geo.Polygon([(2, 2), (4, 2), (4, 0), (2, 0)])
-    ]
+    @classmethod
+    def generate_random_obstacles(cls, num_static=3, num_dynamic=3):
+        # Tạo ngẫu nhiên các chướng ngại vật tĩnh
+        static_obstacles = []
+        for _ in range(num_static):
+            while True:
+                x = random.uniform(-8, 8)
+                y = random.uniform(-8, 8)
+                width = random.uniform(1, 3)
+                height = random.uniform(1, 3)
+                new_obstacle = geo.Polygon([(x, y), (x + width, y), (x + width, y - height), (x, y - height)])
+                # Kiểm tra xem chướng ngại vật mới có giao với các chướng ngại vật đã tồn tại hay không
+                if not any(new_obstacle.intersects(o) for o in static_obstacles):
+                    static_obstacles.append(new_obstacle)
+                    break
+
+        # Tạo ngẫu nhiên các chướng ngại vật động
+        dynamic_obstacles = []
+        for _ in range(num_dynamic):
+            while True:
+                x = random.uniform(-8, 8)
+                y = random.uniform(-8, 8)
+                width = random.uniform(1, 3)
+                height = random.uniform(1, 3)
+                new_obstacle = geo.Polygon([(x, y), (x + width, y), (x + width, y - height), (x, y - height)])
+                # Kiểm tra xem chướng ngại vật mới có giao với các chướng ngại vật đã tồn tại hay không
+                if not any(new_obstacle.intersects(o) for o in static_obstacles + dynamic_obstacles):
+                    dynamic_obstacles.append(new_obstacle)
+                    break
+
+        cls.obstacles = static_obstacles + dynamic_obstacles
 
     @classmethod
     def update(cls, x):
-        # Cập nhật vị trí của 10 chướng ngại vật động
+        # Cập nhật chướng ngại vật động
+        cls.poly1 = np.array([(-8 + (3 * x), 5), (-6 + (3 * x), 5), (-6 + (3 * x), 3), (-8 + (3 * x), 3)])
+        cls.poly2 = np.array([(6 - (3 * x), 0), (8 - (3 * x), 0), (8 - (3 * x), -2), (6 - (3 * x), -2)])
+        cls.poly3 = np.array([(0, 8 - (2 * x)), (2, 8 - (2 * x)), (2, 6 - (2 * x)), (0, 6 - (2 * x))])
+
         cls.obstacles = [
-            geo.Polygon([(-8 + (x % 4), 8), (-6 + (x % 4), 8), (-6 + (x % 4), 6), (-8 + (x % 4), 6)]),
-            geo.Polygon([(6 - (x % 4), 6), (8 - (x % 4), 6), (8 - (x % 4), 4), (6 - (x % 4), 4)]),
-            geo.Polygon([(-8 + (x % 3), -2), (-6 + (x % 3), -2), (-6 + (x % 3), -4), (-8 + (x % 3), -4)]),
-            geo.Polygon([(4 - (x % 5), -8), (6 - (x % 5), -8), (6 - (x % 5), -6), (4 - (x % 5), -6)]),
-            geo.Polygon([(-4 + (x % 2), 4), (-2 + (x % 2), 4), (-2 + (x % 2), 2), (-4 + (x % 2), 2)]),
-            geo.Polygon([(0 - (x % 3), 8), (2 - (x % 3), 8), (2 - (x % 3), 6), (0 - (x % 3), 6)]),
-            geo.Polygon([(-6 + (x % 4), -8), (-4 + (x % 4), -8), (-4 + (x % 4), -6), (-6 + (x % 4), -6)]),
-            geo.Polygon([(6 - (x % 5), -2), (8 - (x % 5), -2), (8 - (x % 5), -4), (6 - (x % 5), -4)]),
-            geo.Polygon([(-2 + (x % 2), -6), (0 + (x % 2), -6), (0 + (x % 2), -8), (-2 + (x % 2), -8)]),
-            geo.Polygon([(2 - (x % 3), 2), (4 - (x % 3), 2), (4 - (x % 3), 0), (2 - (x % 3), 0)])
-        ]
+            geo.Polygon(cls.poly1),  # Chướng ngại vật động 1
+            geo.Polygon(cls.poly2),  # Chướng ngại vật động 2
+            geo.Polygon(cls.poly3),  # Chướng ngại vật động 3
+        ] + cls.obstacles[3:]  # Giữ nguyên các chướng ngại vật tĩnh
 
     @classmethod
     def show(cls):
@@ -55,26 +70,24 @@ class Map:
         pl.close('all')
         pl.figure('Map')
         pl.clf()
-
+    
         # Vẽ các chướng ngại vật
         for o in cls.obstacles:
             plot_polygon(o, facecolor='w', edgecolor='k', add_points=False)
 
         # Vẽ điểm bắt đầu và kết thúc
-        pl.scatter(cls.start_pos[0], cls.start_pos[1], s=30, c='k', marker='x', label='Điểm bắt đầu')
-        pl.scatter(cls.end_pos[0], cls.end_pos[1], s=30, c='k', marker='o', label='Điểm kết thúc')
-
-        pl.legend(loc='best').set_draggable(True)  # Hiển thị chú thích
+        pl.scatter(cls.start_pos[0], cls.start_pos[1], s=30, c='k', marker='x')
+        pl.scatter(cls.end_pos[0], cls.end_pos[1], s=30, c='k', marker='o')
+  
         pl.axis('equal')  # Tạo hệ trục tọa độ đều
         pl.xlabel("x")  # Nhãn trục x
         pl.ylabel("y")  # Nhãn trục y
         pl.xlim(cls.size[0][0], cls.size[1][0])  # Giới hạn trục x
         pl.ylim(cls.size[0][1], cls.size[1][1])  # Giới hạn trục y
-        pl.title('Mê cung với 10 chướng ngại vật động')  # Tiêu đề
+        pl.title('Bản đồ')  # Tiêu đề
         pl.grid()  # Hiển thị lưới
         pl.grid(alpha=0.3, ls=':')  # Thay đổi độ trong suốt và kiểu đường lưới
         pl.show(block=True)
-
 
 
 # Môi trường tĩnh
@@ -104,6 +117,9 @@ class PathPlanning(gym.Env):
         self.obs[0] = self.map.end_pos[0] - self.map.start_pos[0]
         self.obs[1] = self.map.end_pos[1] - self.map.start_pos[1]
         self.per_act = np.array([100, 100])
+
+        # Tạo ngẫu nhiên các chướng ngại vật
+        self.map.generate_random_obstacles()
 
         # Cập nhật trạng thái ban đầu của môi trường
         if self.__old_gym:
@@ -217,22 +233,19 @@ class PathPlanning(gym.Env):
         # Xóa hình cũ
         pl.clf() 
         # Vẽ các chướng ngại vật
-        for o in self.map.obstacles[0:2]:
+        for o in self.map.obstacles:
             plot_polygon(o, facecolor='c', edgecolor='k', add_points=False)
-        o = self.map.obstacles[2]
-        plot_polygon(o, facecolor='c', edgecolor='k', add_points=False, label='Chướng ngại vật')
-        plot_polygon(geo.Point(self.agent_pos).buffer(0.8), facecolor='y', edgecolor='y', add_points=False, label='Khu vực cảnh báo')
-        plot_polygon(geo.Point(self.agent_pos).buffer(0.3), facecolor='r', edgecolor='r', add_points=False, label='Khu vực nguy hiểm')
+        plot_polygon(geo.Point(self.agent_pos).buffer(0.8), facecolor='y', edgecolor='y', add_points=False)
+        plot_polygon(geo.Point(self.agent_pos).buffer(0.3), facecolor='r', edgecolor='r', add_points=False)
         # Vẽ điểm bắt đầu và kết thúc
-        pl.scatter(self.map.start_pos[0], self.map.start_pos[1], s=30, c='k', marker='x', label='Điểm bắt đầu')
-        pl.scatter(self.map.end_pos[0], self.map.end_pos[1], s=30, c='k', marker='o', label='Điểm kết thúc')
+        pl.scatter(self.map.start_pos[0], self.map.start_pos[1], s=30, c='k', marker='x')
+        pl.scatter(self.map.end_pos[0], self.map.end_pos[1], s=30, c='k', marker='o')
         # Vẽ quỹ đạo
         self.traj.append(self.agent_pos.tolist())
         new_lst = [item for sublist in self.traj for item in sublist]
-        pl.plot(new_lst[::2], new_lst[1::2], label='Lộ trình', color='b')
+        pl.plot(new_lst[::2], new_lst[1::2], color='b')
 
         pl.scatter(self.agent_pos[0], self.agent_pos[1], s=1, c='k')
-        pl.legend(loc='best')
         pl.axis('equal')  # Tạo hệ trục tọa độ đều
         pl.xlabel("x")  # Nhãn trục x
         pl.ylabel("y")  # Nhãn trục y
@@ -268,10 +281,4 @@ class AlgorithmAdaptation(gym.ActionWrapper):
     # Chuyển đổi đầu vào của gym thành đầu ra cho mạng nơ-ron
     def reverse_action(self, action):
         # Tình huống liên tục, chuyển đổi hành động từ [lb, ub] sang [-1, 1]
-        lb, ub = self.action_space.low, self.action_space.high
-        action = 2 * (action - lb) / (ub - lb) - 1
-        return pl.clip(action, -1.0, 1.0)
-       
-
-if __name__ == '__main__':
-    Map.show()
+        lb, ub = self.action_space.low

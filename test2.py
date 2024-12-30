@@ -2,7 +2,7 @@
 import torch
 import pylab as pl
 from copy import deepcopy
-from env4 import PathPlanning, AlgorithmAdaptation
+from env2 import PathPlanning, AlgorithmAdaptation
 import pandas as pd
 from sac import SAC
 
@@ -26,11 +26,15 @@ agent.load("Model.pkl")
     
 '''Huấn luyện/kiểm tra mô phỏng học tăng cường'''
 for episode in range(MAX_EPISODE):
-    ## Lấy quan sát ban đầu
+    # Lấy quan sát ban đầu
     obs = env.reset()
     
-    ## Tiến hành một vòng mô phỏng
+    # Tiến hành một vòng mô phỏng
     for steps in range(env.max_episode_steps):
+        # Cập nhật chướng ngại vật động
+        env.map.update(steps)
+        print(f"Obstacles at step {steps}: {env.map.dynamic_obstacles}")  # Kiểm tra
+        
         # Hiển thị
         if render:
             env.render()
@@ -49,7 +53,6 @@ for episode in range(MAX_EPISODE):
             obs = deepcopy(next_obs)
         agentpos.append(agent1_pos)    
     
-    # Kết thúc vòng for
+    # Lưu lại vị trí của tác nhân
     df = pd.DataFrame(agentpos)
     df.to_excel('agentpos.xlsx', index=False)
-# Kết thúc vòng for
