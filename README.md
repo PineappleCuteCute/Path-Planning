@@ -10,3 +10,6 @@
 - Matplotlib >= 3.5.1 (Vẽ đồ thị)
 - Scipy >= 1.7.3 (Tích phân)
 - Shapely >= 2.0.1 (Vật cản)
+
+## **Cách chạy**:
+Chạy file test.py

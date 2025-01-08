@@ -15,7 +15,7 @@ import random
 class Map:
     size = np.array([[-10.0, -10.0], [10.0, 10.0]])  # Giá trị nhỏ nhất và lớn nhất của x, y
     start_pos = np.array([-7, 7])  # Tọa độ điểm bắt đầu
-    end_pos = np.array([9, -9])  # Tọa độ điểm kết thúc
+    end_pos = np.array([9.5, -9.5])  # Tọa độ điểm kết thúc
 
     @classmethod
     def generate_random_obstacles(cls, num_static=3, num_dynamic=3):
