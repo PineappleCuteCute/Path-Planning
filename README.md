@@ -13,3 +13,4 @@
 
 ## **Cách chạy**:
 Chạy file test.py
+Chú ý:  thay đổi env ở dòng 5 thành env2, env3 để chạy được môi trường khác
